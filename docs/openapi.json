@@ -1,0 +1,258 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Valete+ — leitura de notícias (não oficial)",
+    "version": "2026-10-27",
+    "description": "Recorte da API interna observado com sessão autorizada em 27/10/2026. Não é um contrato do fornecedor. Requer sessão válida do app; nome dos cookies, login programático, renovação e autenticação por Bearer para o feed não foram verificados. Não foi definido securityScheme com nome inventado. Os esquemas são amostrais, permitem campos extras e não garantem presença de todos os campos. Consulte api-valete.md e integracao.md."
+  },
+  "servers": [{ "url": "https://app.valete.org.br" }],
+  "x-authentication": {
+    "required": true,
+    "observedTransport": "Sessão do navegador em chamadas same-origin; sem Authorization manual no feed.",
+    "cookieNamesVerified": false,
+    "anonymousBehavior": "Redirecionamento para /login; seguindo o redirecionamento, 200 text/html."
+  },
+  "tags": [
+    { "name": "Artigos" },
+    { "name": "Busca" }
+  ],
+  "paths": {
+    "/api/post": {
+      "get": {
+        "tags": ["Artigos"],
+        "operationId": "listPosts",
+        "summary": "Lista posts ou artigos",
+        "description": "Confirmados filter=all, filter=articles e segunda página de articles com lastId. Retorna array direto; 15 itens nas páginas observadas, sem garantia de tamanho fixo. O corpo HTML dos artigos está em Article.body. Não confundir post.id com Article.id.",
+        "x-evidence": "live-authenticated-and-anonymous",
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "Valores testados: all e articles. O cliente usa all por padrão; padrão do servidor quando omitido não foi testado. Outros valores não fazem parte deste recorte.",
+            "schema": { "type": "string" },
+            "example": "articles"
+          },
+          { "$ref": "#/components/parameters/LastId" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/PostPage" },
+          "default": { "$ref": "#/components/responses/UnspecifiedFailure" }
+        }
+      }
+    },
+    "/api/creator/post": {
+      "get": {
+        "tags": ["Artigos"],
+        "operationId": "listCreatorPosts",
+        "summary": "Lista artigos de um autor ou organização",
+        "description": "Primeira página com id=post.Author.id e filter=articles confirmada ao vivo. lastId encontrado no JavaScript do perfil, mas não testado nesta rota. Não usar Article.authorId numérico como id do autor.",
+        "x-evidence": "live-first-page; static-pagination",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "description": "Identificador opaco em post.Author.id; UUID observado. Comportamento quando ausente não foi testado.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "filter",
+            "in": "query",
+            "description": "articles foi o valor testado.",
+            "schema": { "type": "string" },
+            "example": "articles"
+          },
+          { "$ref": "#/components/parameters/LastId" }
+        ],
+        "responses": {
+          "200": { "$ref": "#/components/responses/PostPage" },
+          "default": { "$ref": "#/components/responses/UnspecifiedFailure" }
+        }
+      }
+    },
+    "/api/search": {
+      "get": {
+        "tags": ["Busca"],
+        "operationId": "search",
+        "summary": "Busca usuários, artigos e conteúdos de módulos",
+        "description": "Resultados heterogêneos. O frontend só consulta com mais de dois caracteres; não é um limite confirmado do servidor. Foram observados 11 a 20 itens. Não foi confirmada paginação. Resultados article usam minúscula e não trouxeram body.",
+        "x-evidence": "live-authenticated-and-anonymous",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "description": "Texto de busca; codifique a query string. Comportamento sem parâmetro não foi testado.",
+            "schema": { "type": "string" },
+            "example": "Paracelso"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array de resultados com sessão válida. HTML de login pode aparecer ao seguir redirecionamentos sem sessão.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/SearchResult" }
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "description": "Página de login após redirecionamento; não tratar como resultado de busca."
+                }
+              }
+            }
+          },
+          "default": { "$ref": "#/components/responses/UnspecifiedFailure" }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "LastId": {
+        "name": "lastId",
+        "in": "query",
+        "description": "ID do último post da página bruta anterior. Não é Article.id. Omita na primeira página. Pare em array vazio ou cursor que não avança.",
+        "schema": { "type": "string" }
+      }
+    },
+    "responses": {
+      "PostPage": {
+        "description": "Array direto de posts com sessão válida. 15 itens na amostra, sem total ou nextCursor. HTML de login pode aparecer ao seguir redirecionamentos sem sessão.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "array",
+              "items": { "$ref": "#/components/schemas/Post" }
+            }
+          },
+          "text/html": {
+            "schema": {
+              "type": "string",
+              "description": "Login após redirecionamento; não é uma página de dados válida."
+            }
+          }
+        }
+      },
+      "UnspecifiedFailure": {
+        "description": "Erro ou redirecionamento. Não há formato de erro JSON confirmado. Verifique status, Location, URL final e Content-Type. Trate 401/403/429/5xx se ocorrerem; esses códigos não foram provocados nem observados nos testes deste recorte."
+      }
+    },
+    "schemas": {
+      "Author": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string", "description": "Use este ID no feed por autor." },
+          "handle": { "type": "string" },
+          "name": { "type": "string" },
+          "avatarUrl": { "type": "string", "description": "Pode ser vazio." },
+          "about": { "type": "string", "description": "Observado nos resultados de busca." },
+          "type": { "type": "string", "description": "Não usar como permissão ou identificador; variou entre representações." },
+          "stampType": { "type": "string" },
+          "offers": { "type": "array", "items": {}, "description": "Esquema dos itens não mapeado." }
+        }
+      },
+      "ArticleImage": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string" },
+          "imageUri": { "type": "string" },
+          "caption": { "type": "string" },
+          "key": { "type": "string" },
+          "width": { "type": "number" },
+          "widthPercentage": { "type": "number" }
+        }
+      },
+      "Article": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string", "description": "ID do artigo, não do post." },
+          "title": { "type": "string" },
+          "subtitle": { "type": "string" },
+          "body": { "type": "string", "description": "HTML não confiável. Sanitize antes de renderizar." },
+          "imageUri": { "type": "string" },
+          "authorId": { "type": "number", "description": "ID numérico interno, não usar no feed por autor." },
+          "Author": { "$ref": "#/components/schemas/Author" },
+          "bylineName": { "type": "string" },
+          "BylineAuthor": { "$ref": "#/components/schemas/Author" },
+          "ArticleImages": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ArticleImage" },
+            "description": "Pode estar vazio mesmo com imagens no HTML."
+          }
+        }
+      },
+      "Post": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string", "description": "Cursor e chave da publicação; opaco." },
+          "type": { "type": "string", "examples": ["STANDARD", "REPOST"] },
+          "contentType": { "type": "string", "examples": ["ARTICLE"] },
+          "body": { "type": "string", "description": "Corpo do post, não necessariamente da matéria." },
+          "Article": { "$ref": "#/components/schemas/Article" },
+          "Author": { "$ref": "#/components/schemas/Author" },
+          "OriginalPost": { "$ref": "#/components/schemas/Post" },
+          "originalPostId": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "publishedAt": { "type": "string", "format": "date-time" },
+          "status": { "type": "string" },
+          "likes": { "type": "number" },
+          "comments": { "type": "number" },
+          "reposts": { "type": "number" },
+          "views": { "type": "number" },
+          "liked": { "type": "boolean", "description": "Estado pessoal; não publicar no agregador." },
+          "isBookmarked": { "type": "boolean", "description": "Estado pessoal; não publicar no agregador." },
+          "pinned": { "type": "boolean" },
+          "profilePinnedAt": { "description": "Observado apenas como null; demais tipos não confirmados." },
+          "PostImages": { "type": "array", "items": {} },
+          "Playlists": { "type": "array", "items": {} },
+          "mentions": { "type": "array", "items": {} },
+          "Space": { "description": "Observado como null, fora do escopo." },
+          "minVersion": { "type": "string" },
+          "bylineName": { "type": "string" }
+        }
+      },
+      "SearchArticle": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string", "description": "ID do artigo." },
+          "postId": { "type": "string", "description": "ID do post associado." },
+          "title": { "type": "string" },
+          "imageUri": { "type": "string" },
+          "Author": { "$ref": "#/components/schemas/Author" }
+        }
+      },
+      "SearchContent": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "moduleSlug": { "type": "string" },
+          "moduleName": { "type": "string" },
+          "moduleImageUriH": { "type": "string" }
+        }
+      },
+      "SearchResult": {
+        "type": "object",
+        "additionalProperties": true,
+        "description": "Nas amostras, cada item tinha user, article ou content. Variantes futuras são permitidas.",
+        "properties": {
+          "title": { "type": "string" },
+          "imageUrl": { "type": "string" },
+          "user": { "$ref": "#/components/schemas/Author" },
+          "article": { "$ref": "#/components/schemas/SearchArticle" },
+          "content": { "$ref": "#/components/schemas/SearchContent" }
+        }
+      }
+    }
+  }
+}
